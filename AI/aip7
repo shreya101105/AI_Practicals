@@ -1,0 +1,69 @@
+% Parent relationships
+parent(ratiram, ghansham).
+parent(ghansham, shreya).
+parent(shila, shreya).
+parent(ghansham, spandan).
+parent(shila, spandan).
+parent(ghansham, saniya).
+parent(shila, saniya).
+
+% Gender information
+male(ratiram).
+male(ghansham).
+male(spandan).
+
+female(shila).
+female(shreya).
+female(saniya).
+
+% Marriage relationship
+wife(shila, ghansham).
+husband(ghansham, shila).
+
+
+% ---------------- RULES ----------------
+
+% Father
+father(X, Y) :-
+    parent(X, Y),
+    male(X).
+
+% Mother
+mother(X, Y) :-
+    parent(X, Y),
+    female(X).
+
+% Child
+child(X, Y) :-
+    parent(Y, X).
+
+% Son
+son(X, Y) :-
+    child(X, Y),
+    male(X).
+
+% Daughter
+daughter(X, Y) :-
+    child(X, Y),
+    female(X).
+
+% Sibling
+sibling(X, Y) :-
+    parent(Z, X),
+    parent(Z, Y),
+    X \= Y.
+
+% Grandparent
+grandparent(X, Y) :-
+    parent(X, Z),
+    parent(Z, Y).
+
+% Grandfather
+grandfather(X, Y) :-
+    grandparent(X, Y),
+    male(X).
+
+% Grandmother
+grandmother(X, Y) :-
+    grandparent(X, Y),
+    female(X).
