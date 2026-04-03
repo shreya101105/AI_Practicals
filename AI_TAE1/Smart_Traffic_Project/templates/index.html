@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Traffic Signal Agent</title>
+    <style>
+        :root {
+            --bg-dark: #1e1b4b; /* Deep Indigo background */
+            --road-color: #374151; /* Gray roads */
+            --grass-color: #064e3b; /* Emerald grass for intersection area */
+            --accent-blue: #0ea5e9;
+            --accent-green: #22c55e;
+            --accent-yellow: #eab308;
+            --accent-red: #ef4444;
+            --text-light: #f8fafc;
+            --font-family: 'Inter', -apple-system, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            font-family: var(--font-family);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .dashboard {
+            width: 380px;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            border-right: 1px solid rgba(255,255,255,0.1);
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            z-index: 10;
+            box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+            overflow-y: auto;
+        }
+
+        .dashboard::-webkit-scrollbar { width: 6px; }
+        .dashboard::-webkit-scrollbar-track { background: transparent; }
+        .dashboard::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+
+        .header h1 {
+            font-size: 1.8rem;
+            margin: 0 0 0.5rem 0;
+            background: linear-gradient(135deg, #38bdf8, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header p {
+            color: #cbd5e1;
+            font-size: 0.8rem;
+            margin: 0;
+            line-height: 1.4;
+        }
+        
+        .stats-row {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .stat-card {
+            flex: 1;
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #94a3b8;
+        }
+
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .controls {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        button {
+            flex: 1;
+            padding: 0.8rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        #playBtn { background: var(--accent-blue); color: white; }
+        #playBtn:hover { background: #0284c7; }
+        #resetBtn { background: transparent; border: 1px solid rgba(255,255,255,0.2); color: white; }
+        #resetBtn:hover { background: rgba(255,255,255,0.1); }
+
+        .manual-controls h3 {
+            margin-top: 0; 
+            font-size: 0.75rem; 
+            color: #cbd5e1; 
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .simulation-area {
+            flex: 1;
+            position: relative;
+            background: var(--grass-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        /* Roads */
+        .road-v {
+            position: absolute;
+            width: 160px;
+            height: 100%;
+            background: var(--road-color);
+            border-left: 2px dashed rgba(255,255,255,0.4);
+            border-right: 2px dashed rgba(255,255,255,0.4);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .road-h {
+            position: absolute;
+            height: 160px;
+            width: 100%;
+            background: var(--road-color);
+            border-top: 2px dashed rgba(255,255,255,0.4);
+            border-bottom: 2px dashed rgba(255,255,255,0.4);
+            display: flex;
+            justify-content: space-between;
+        }
+        .intersection-center {
+            position: absolute;
+            width: 160px;
+            height: 160px;
+            background: var(--road-color);
+            z-index: 2;
+        }
+
+        /* Direction Arrows */
+        .arrow-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            color: rgba(255,255,255,0.6);
+            font-weight: bold;
+            pointer-events: none;
+        }
+        
+        .road-v .arrow-container-n {
+            height: calc(50% - 80px);
+            width: 50%;
+            align-self: flex-start;
+            flex-direction: column;
+            gap: 40px;
+        }
+        .road-v .arrow-container-s {
+            height: calc(50% - 80px);
+            width: 50%;
+            align-self: flex-end;
+            flex-direction: column;
+            gap: 40px;
+        }
+
+        .road-h .arrow-container-w {
+            width: calc(50% - 80px);
+            height: 50%;
+            align-self: flex-end;
+            gap: 40px;
+        }
+        .road-h .arrow-container-e {
+            width: calc(50% - 80px);
+            height: 50%;
+            align-self: flex-start;
+            gap: 40px;
+        }
+
+        /* Traffic Lights */
+        .light-group {
+            position: absolute;
+            background: #111827;
+            padding: 5px;
+            border-radius: 20px;
+            display: flex;
+            gap: 5px;
+            z-index: 5;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+            border: 2px solid rgba(255,255,255,0.15);
+        }
+        
+        /* 
+           Since they are independent now, we place them corresponding to the incoming traffic.
+           North queue comes from the Top. Light faces up.
+           South queue comes from the Bottom. Light faces down.
+           East queue comes from the Right. Light faces right.
+           West queue comes from the Left. Light faces left.
+        */
+        .light-group.ns-1 { top: calc(50% - 150px); left: calc(50% - 70px); flex-direction: column; } /* North */
+        .light-group.ns-2 { bottom: calc(50% - 150px); right: calc(50% - 70px); flex-direction: column; } /* South */
+        .light-group.ew-1 { right: calc(50% - 150px); top: calc(50% - 70px); } /* East */
+        .light-group.ew-2 { left: calc(50% - 150px); bottom: calc(50% - 70px); } /* West */
+
+        .bulb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #374151;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+            transition: all 0.3s ease;
+        }
+
+        .bulb.red.active { background: var(--accent-red); box-shadow: 0 0 16px var(--accent-red), inset 0 0 5px white; }
+        .bulb.yellow.active { background: var(--accent-yellow); box-shadow: 0 0 16px var(--accent-yellow), inset 0 0 5px white; }
+        .bulb.green.active { background: var(--accent-green); box-shadow: 0 0 16px var(--accent-green), inset 0 0 5px white; }
+
+        /* Queues Display */
+        .queue-display {
+            position: absolute;
+            z-index: 4;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .queue-badge {
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            color: #fff;
+        }
+
+        /* Adjust positions to be visually correct for incoming directions */
+        .queue-n { top: calc(50% - 250px); left: calc(50% - 40px); flex-direction: column-reverse; }
+        .queue-s { bottom: calc(50% - 250px); left: calc(50% + 40px); flex-direction: column; }
+        .queue-e { right: calc(50% - 250px); top: calc(50% - 40px); flex-direction: row; }
+        .queue-w { left: calc(50% - 250px); top: calc(50% + 40px); flex-direction: row-reverse; }
+
+        .cars-container {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+            max-width: 130px;
+            justify-content: flex-end;
+        }
+        .queue-n .cars-container { flex-direction: column; max-height: 150px; justify-content: flex-start;}
+        .queue-s .cars-container { flex-direction: column; max-height: 150px; justify-content: flex-start;}
+        .queue-e .cars-container { flex-direction: row; justify-content: flex-start; }
+        .queue-w .cars-container { flex-direction: row; justify-content: flex-start; }
+
+        .car { width: 14px; height: 22px; background: #e2e8f0; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+        .queue-e .car, .queue-w .car { width: 22px; height: 14px; }
+
+        .log-box {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: monospace;
+            font-size: 0.75rem;
+            flex-grow: 1;
+            overflow-y: auto;
+            color: #a7f3d0;
+        }
+        .log-entry { margin-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px; }
+
+        .grid-overlay {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+    </style>
+</head>
+<body>
+
+    <div class="dashboard">
+        <div class="header">
+            <h1>Smart Traffic Signal Agent</h1>
+        </div>
+
+        <div class="stats-row">
+            <div class="stat-card">
+                <span class="stat-label">Total Wait Time</span>
+                <span class="stat-value" id="totalWaitTime">0</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Step</span>
+                <span class="stat-value" id="currentStep">0</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="playBtn">Start Auto</button>
+            <button id="stepBtn" style="background: rgba(255,255,255,0.1); color:white; border:none; border-radius:8px; cursor:pointer;">
+                Step</button>
+            <button id="resetBtn">Reset</button>
+        </div>
+
+        <div class="manual-controls" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.5rem; margin-top: 1rem;">
+            <h3 style="margin-bottom: 0.8rem;">Manual Signal Override (1 Green Only)</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-bottom: 1.5rem;">
+                <button id="nMBtn" style="background:#22c55e; color:white; font-size: 0.85rem;">North Green</button>
+                <button id="sMBtn" style="background:#22c55e; color:white; font-size: 0.85rem;">South Green</button>
+                <button id="eMBtn" style="background:#22c55e; color:white; font-size: 0.85rem;">East Green</button>
+                <button id="wMBtn" style="background:#22c55e; color:white; font-size: 0.85rem;">West Green</button>
+            </div>
+
+            <h3 style="margin-bottom: 0.8rem;">Set Waiting Vehicles</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-bottom: 0.8rem;">
+                <input type="number" id="inN" placeholder="North" min="0" style="background:rgba(0,0,0,0.4);
+                 border:1px solid rgba(255,255,255,0.15); color:white; padding:0.6rem; border-radius:6px; font-size:0.85rem;">
+                <input type="number" id="inS" placeholder="South" min="0" style="background:rgba(0,0,0,0.4);
+                 border:1px solid rgba(255,255,255,0.15); color:white; padding:0.6rem; border-radius:6px; font-size:0.85rem;">
+                <input type="number" id="inE" placeholder="East" min="0" style="background:rgba(0,0,0,0.4);
+                 border:1px solid rgba(255,255,255,0.15); color:white; padding:0.6rem; border-radius:6px; font-size:0.85rem;">
+                <input type="number" id="inW" placeholder="West" min="0" style="background:rgba(0,0,0,0.4);
+                 border:1px solid rgba(255,255,255,0.15); color:white; padding:0.6rem; border-radius:6px; font-size:0.85rem;">
+            </div>
+            <button id="setVehiclesBtn" style="width:100%; background:transparent; border:1px solid rgba(250,204,21,0.5); color:#fde047; padding:0.6rem; font-size:0.85rem;">Apply Vehicles</button>
+        </div>
+        
+        <div class="log-box" id="logBox">
+            <div class="log-entry">System initialized. Ready for simulation.</div>
+        </div>
+    </div>
+
+    <div class="simulation-area">
+        <div class="grid-overlay"></div>
+        <div class="road-v">
+            <div class="arrow-container arrow-container-n">
+                <span>↓</span><span>↓</span><span>↓</span>
+            </div>
+            <div class="arrow-container arrow-container-s">
+                <span>↑</span><span>↑</span><span>↑</span>
+            </div>
+        </div>
+        <div class="road-h">
+            <div class="arrow-container arrow-container-w">
+                <span>→</span><span>→</span><span>→</span>
+            </div>
+            <div class="arrow-container arrow-container-e">
+                <span>←</span><span>←</span><span>←</span>
+            </div>
+        </div>
+        <div class="intersection-center"></div>
+
+        <!-- Direction Labels and Wait Times -->
+        <div style="position:absolute; top: 20px; text-align:center; z-index:4; background: rgba(15,23,42,0.8); padding: 5px 15px;
+         border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+            <div style="color: #94a3b8; font-size: 0.8rem; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">
+                North Direction</div>
+            <div style="color: #cbd5e1; font-size: 0.75rem; margin-top: 2px;">Wait: <span id="wait-n" style="color: #ef4444; 
+            font-weight:bold;">0</span>s</div>
+        </div>
+        
+        <div style="position:absolute; bottom: 20px; text-align:center; z-index:4; background: rgba(15,23,42,0.8); 
+        padding: 5px 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+            <div style="color: #94a3b8; font-size: 0.8rem; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">
+                South Direction</div>
+            <div style="color: #cbd5e1; font-size: 0.75rem; margin-top: 2px;">Wait: <span id="wait-s" style="color: #ef4444; 
+            font-weight:bold;">0</span>s</div>
+        </div>
+
+        <div style="position:absolute; right: 20px; text-align:center; z-index:4; background: rgba(15,23,42,0.8); padding: 5px 15px;
+         border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+            <div style="color: #94a3b8; font-size: 0.8rem; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">
+                East Direction</div>
+            <div style="color: #cbd5e1; font-size: 0.75rem; margin-top: 2px;">Wait: <span id="wait-e" style="color: #ef4444;
+             font-weight:bold;">0</span>s</div>
+        </div>
+
+
+        <div style="position:absolute; left: 20px; text-align:center; z-index:4; background: rgba(15,23,42,0.8); padding: 5px 15px; 
+        border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+            <div style="color: #94a3b8; font-size: 0.8rem; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">
+                West Direction</div>
+            <div style="color: #cbd5e1; font-size: 0.75rem; margin-top: 2px;">Wait: <span id="wait-w" style="color: #ef4444; 
+            font-weight:bold;">0</span>s</div>
+        </div>
+
+        <!-- North Light (ns-1) -->
+        <div class="light-group ns-1" id="light-n">
+            <div class="bulb red"></div><div class="bulb yellow"></div><div class="bulb green active"></div>
+        </div>
+        <!-- South Light (ns-2) -->
+        <div class="light-group ns-2" id="light-s">
+            <div class="bulb red active"></div><div class="bulb yellow"></div><div class="bulb green"></div>
+        </div>
+        <!-- East Light (ew-1) -->
+        <div class="light-group ew-1" id="light-e">
+            <div class="bulb red active"></div><div class="bulb yellow"></div><div class="bulb green"></div>
+        </div>
+        <!-- West Light (ew-2) -->
+        <div class="light-group ew-2" id="light-w">
+            <div class="bulb red active"></div><div class="bulb yellow"></div><div class="bulb green"></div>
+        </div>
+
+        <!-- Queues -->
+        <div class="queue-display queue-n">
+            <div class="cars-container" id="cars-n"></div>
+            <div class="queue-badge" id="badge-n">0</div>
+        </div>
+        <div class="queue-display queue-s">
+            <div class="queue-badge" id="badge-s">0</div>
+            <div class="cars-container" id="cars-s"></div>
+        </div>
+        <div class="queue-display queue-e">
+            <div class="queue-badge" id="badge-e">0</div>
+            <div class="cars-container" id="cars-e"></div>
+        </div>
+        <div class="queue-display queue-w">
+            <div class="cars-container" id="cars-w"></div>
+            <div class="queue-badge" id="badge-w">0</div>
+        </div>
+    </div>
+
+    <script>
+        let isRunning = false;
+        let intervalId = null;
+
+        const playBtn = document.getElementById('playBtn');
+        const stepBtn = document.getElementById('stepBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const logBox = document.getElementById('logBox');
+
+        function addLog(msg) {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.textContent = msg;
+            logBox.prepend(entry);
+            if(logBox.children.length > 50) logBox.lastChild.remove();
+        }
+
+        function updateLights(state) {
+            // State format: 'N_GREEN', 'S_YELLOW', etc.
+            const parts = state.split('_');
+            const activeDir = parts[0]; // N, S, E, or W
+            const activeColor = parts[1].toLowerCase(); // green or yellow
+
+            // Select groups
+            const groups = {
+                'N': document.getElementById('light-n'),
+                'S': document.getElementById('light-s'),
+                'E': document.getElementById('light-e'),
+                'W': document.getElementById('light-w')
+            };
+
+            // Reset all to red first
+            for (const dir in groups) {
+                const group = groups[dir];
+                group.querySelector('.red').classList.add('active');
+                group.querySelector('.yellow').classList.remove('active');
+                group.querySelector('.green').classList.remove('active');
+            }
+
+            // Set the active one
+            if (activeDir in groups) {
+                const activeGroup = groups[activeDir];
+                activeGroup.querySelector('.red').classList.remove('active');
+                activeGroup.querySelector('.' + activeColor).classList.add('active');
+            }
+        }
+
+        function updateQueues(queues) {
+            ['N', 'S', 'E', 'W'].forEach(dir => {
+                const count = queues[dir];
+                document.getElementById(`badge-${dir.toLowerCase()}`).textContent = count;
+                
+                const container = document.getElementById(`cars-${dir.toLowerCase()}`);
+                container.innerHTML = '';
+                const displayCount = Math.min(count, 12); 
+                for(let i=0; i<displayCount; i++) {
+                    const car = document.createElement('div');
+                    car.className = 'car';
+                    const hue = Math.floor(Math.random() * 360);
+                    car.style.background = `hsl(${hue}, 70%, 65%)`;
+                    container.appendChild(car);
+                }
+            });
+        }
+
+        function updateWaitTimes(wait_times) {
+            if (!wait_times) return;
+            ['N', 'S', 'E', 'W'].forEach(dir => {
+                const el = document.getElementById(`wait-${dir.toLowerCase()}`);
+                if (el) {
+                    el.textContent = wait_times[dir];
+                    // Turn green if wait time is 0 (i.e. Green light is active)
+                    el.style.color = wait_times[dir] === 0 ? '#22c55e' : '#ef4444';
+                }
+            });
+        }
+
+        async function fetchStep() {
+            try {
+                const res = await fetch('/step', { method: 'POST' });
+                const data = await res.json();
+                
+                document.getElementById('totalWaitTime').textContent = data.total_waiting_time;
+                document.getElementById('currentStep').textContent = data.time_step;
+                
+                updateLights(data.light_state);
+                updateQueues(data.queues);
+                updateWaitTimes(data.wait_times);
+
+                if (data.action_taken !== 'KEEP') {
+                    addLog(`[Step ${data.time_step}] Signal switched to ${data.light_state.replace('_', ' ')}`);
+                }
+            } catch (err) {
+                console.error("Error stepping simulation:", err);
+            }
+        }
+
+        async function setManualLight(state) {
+            try {
+                const res = await fetch('/manual_light', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({state: state})
+                });
+                const data = await res.json();
+                updateLights(data.light_state);
+                addLog(`Manual Override Initiated: Set to ${state.replace('_', ' ')}`);
+            } catch (err) {
+                console.error("Error setting manual light:", err);
+            }
+        }
+
+        async function setVehicles() {
+            const queues = {
+                N: document.getElementById('inN').value,
+                S: document.getElementById('inS').value,
+                E: document.getElementById('inE').value,
+                W: document.getElementById('inW').value
+            };
+            
+            Object.keys(queues).forEach(k => { if(queues[k] === '') delete queues[k]; });
+            if (Object.keys(queues).length === 0) return;
+
+            try {
+                const res = await fetch('/set_queues', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({queues: queues})
+                });
+                const data = await res.json();
+                updateQueues(data.queues);
+                addLog(`Manual Override: Vehicles updated`);
+                
+                ['inN','inS','inE','inW'].forEach(id => document.getElementById(id).value = '');
+            } catch (err) {
+                console.error("Error setting vehicles:", err);
+            }
+        }
+
+        async function resetSim() {
+            try {
+                await fetch('/reset', { method: 'POST' });
+                document.getElementById('totalWaitTime').textContent = '0';
+                document.getElementById('currentStep').textContent = '0';
+                logBox.innerHTML = '<div class="log-entry">Simulation reset. Ready.</div>';
+                
+                updateLights('N_GREEN');
+                updateQueues({N:0, S:0, E:0, W:0});
+                updateWaitTimes({N:0, S:0, E:0, W:0});
+                
+                if(isRunning) togglePlay();
+            } catch (err) { console.error("Error resetting:", err); }
+        }
+
+        function togglePlay() {
+            isRunning = !isRunning;
+            if (isRunning) {
+                playBtn.textContent = 'Pause Auto';
+                playBtn.style.background = '#ef4444';
+                intervalId = setInterval(fetchStep, 800);
+            } else {
+                playBtn.textContent = 'Start Auto';
+                playBtn.style.background = 'var(--accent-blue)';
+                clearInterval(intervalId);
+            }
+        }
+
+        document.getElementById('nMBtn').addEventListener('click', () => setManualLight('N_GREEN'));
+        document.getElementById('sMBtn').addEventListener('click', () => setManualLight('S_GREEN'));
+        document.getElementById('eMBtn').addEventListener('click', () => setManualLight('E_GREEN'));
+        document.getElementById('wMBtn').addEventListener('click', () => setManualLight('W_GREEN'));
+        
+        document.getElementById('setVehiclesBtn').addEventListener('click', setVehicles);
+
+        playBtn.addEventListener('click', togglePlay);
+        stepBtn.addEventListener('click', () => { if(!isRunning) fetchStep(); });
+        resetBtn.addEventListener('click', resetSim);
+
+        // Initial setup
+        updateLights('N_GREEN');
+    </script>
+</body>
+</html>
